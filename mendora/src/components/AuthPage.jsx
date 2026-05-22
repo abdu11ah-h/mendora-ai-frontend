@@ -247,10 +247,10 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
             {/* Signup name fields */}
             {mode === "signup" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-                {["First Name", "Last Name"].map(p => (
+               {["First Name", "Last Name"].map(p => (
                   <div key={p}>
                     <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>{p}</label>
-                    <input placeholder={p} onKeyDown={handleKeyDown}
+                    <input placeholder={p} onKeyDown={(e) => { if(e.key==="Enter") handleSubmit(); }}
                       style={inputStyle(false)} />
                   </div>
                 ))}
