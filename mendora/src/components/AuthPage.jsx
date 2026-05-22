@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { C, useTheme, ROLES } from "../lib/theme";
-import { GlassCard, GlowButton } from "./ui";
+import { GlassCard, GlowButton } from "./ui"; 
+import { authAPI, setUser } from "../lib/api";
 
 // ─── ROLE SELECTOR CARD ───────────────────────────────────────────────────────
 const RoleCard = ({ role, selected, onSelect, dark }) => {
@@ -79,22 +80,31 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
   const t = useTheme(dark);
   const roleCfg = ROLES[selectedRole];
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!email) { setError("Please enter your email."); return; }
     if (mode !== "forgot" && !password) { setError("Please enter your password."); return; }
     if (mode !== "forgot" && password.length < 6) { setError("Password must be at least 6 characters."); return; }
     setError("");
-    setLoading(true);
-    // Simulate auth delay then navigate
-    setTimeout(() => {
+   setLoading(true);
+    try {
+      if (mode === "login") {
+        await authAPI.login(email, password);
+        const me = await authAPI.me();
+        setUser(me);
+        if (setRole) setRole(me.role);
+        setPage(ROLES[me.role]?.defaultPage || "dashboard");
+      } else if (mode === "signup") {
+        await authAPI.register({ email, password, first_name: "User", last_name: "User", role: selectedRole });
+        setError("Registered! Please check your email to verify.");
+      } else {
+        await authAPI.forgotPassword(email);
+        setError("Reset link sent to your email!");
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setLoading(false);
-      if (setRole) setRole(selectedRole);
-      setPage(ROLES[selectedRole].defaultPage);
-    }, 900);
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") handleSubmit();
+    }
   };
 
   const inputStyle = (focused) => ({
