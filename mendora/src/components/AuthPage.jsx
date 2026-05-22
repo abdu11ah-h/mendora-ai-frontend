@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { C, useTheme, ROLES } from "../lib/theme";
-import { GlassCard, GlowButton } from "./ui"; 
+import { GlassCard, GlowButton } from "./ui";
 import { authAPI, setUser } from "../lib/api";
 
 // ─── ROLE SELECTOR CARD ───────────────────────────────────────────────────────
@@ -73,6 +73,8 @@ const RoleCard = ({ role, selected, onSelect, dark }) => {
 const AuthPage = ({ mode, setPage, setRole, dark }) => {
   const [email, setEmail]           = useState("");
   const [password, setPassword]     = useState("");
+  const [firstName, setFirstName]   = useState("");
+  const [lastName, setLastName]     = useState("");
   const [showPass, setShowPass]     = useState(false);
   const [selectedRole, setSelectedRole] = useState("student");
   const [loading, setLoading]       = useState(false);
@@ -85,7 +87,7 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
     if (mode !== "forgot" && !password) { setError("Please enter your password."); return; }
     if (mode !== "forgot" && password.length < 6) { setError("Password must be at least 6 characters."); return; }
     setError("");
-   setLoading(true);
+    setLoading(true);
     try {
       if (mode === "login") {
         await authAPI.login(email, password);
@@ -94,17 +96,26 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
         if (setRole) setRole(me.role);
         setPage(ROLES[me.role]?.defaultPage || "dashboard");
       } else if (mode === "signup") {
-        await authAPI.register({ email, password, first_name: "User", last_name: "User", role: selectedRole });
-        setError("Registered! Please check your email to verify.");
+        await authAPI.register({
+          email, password,
+          first_name: firstName || "User",
+          last_name: lastName || "User",
+          role: selectedRole
+        });
+        setError("✅ Registered! Please check your email to verify your account.");
       } else {
         await authAPI.forgotPassword(email);
-        setError("Reset link sent to your email!");
+        setError("✅ Reset link sent to your email!");
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") handleSubmit();
   };
 
   const inputStyle = (focused) => ({
@@ -135,11 +146,9 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
         borderRight: `1px solid ${t.border}`,
         position: "relative", overflow: "hidden",
       }}>
-        {/* Ambient glows */}
         <div style={{ position: "absolute", top: "20%", left: "30%", width: 300, height: 300, borderRadius: "50%", background: `radial-gradient(circle, ${C.purple}20, transparent 70%)`, pointerEvents: "none" }} />
         <div style={{ position: "absolute", bottom: "25%", right: "20%", width: 200, height: 200, borderRadius: "50%", background: `radial-gradient(circle, ${C.cyan}15, transparent 70%)`, pointerEvents: "none" }} />
 
-        {/* Logo */}
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}
           style={{ marginBottom: 32, display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 52, height: 52, borderRadius: 16, background: `linear-gradient(135deg, ${C.purple}, ${C.cyan})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, boxShadow: `0 8px 32px ${C.purple}50` }}>✦</div>
@@ -163,9 +172,8 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
           Mendora AI supports every stakeholder in the student wellness ecosystem — with compassion, intelligence, and care.
         </motion.p>
 
-        {/* Animated emoji row */}
         <div style={{ display: "flex", gap: 20 }}>
-          {["😊", "🧘", "📊", "🤖", "🕊️"].map((e, i) => (
+          {["😊", "🧠", "📈", "💛", "🌈"].map((e, i) => (
             <motion.div key={i}
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 2.5, delay: i * 0.35, repeat: Infinity }}
@@ -174,7 +182,6 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
           ))}
         </div>
 
-        {/* Role-specific description */}
         <AnimatePresence mode="wait">
           <motion.div
             key={selectedRole}
@@ -197,7 +204,6 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
       {/* ── Right form panel ── */}
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 40px" }}>
         <div style={{ width: "100%", maxWidth: 460 }}>
-          {/* Header */}
           <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.4 }}
             style={{ marginBottom: 32 }}>
             <h1 style={{ fontSize: 26, fontWeight: 800, color: t.textPrimary, marginBottom: 6 }}>
@@ -208,7 +214,6 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
             </p>
           </motion.div>
 
-          {/* ── ROLE SELECTOR ── */}
           {mode !== "forgot" && (
             <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1, duration: 0.4 }}
               style={{ marginBottom: 24 }}>
@@ -224,40 +229,19 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
           )}
 
           <GlassCard dark={dark} style={{ padding: 28 }}>
-            {/* Social login */}
-            {mode !== "forgot" && (
-              <>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
-                  {[{ label: "Google", icon: "G" }, { label: "Microsoft", icon: "M" }].map(s => (
-                    <motion.button key={s.label} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                      style={{ padding: "10px", borderRadius: 10, border: `1px solid ${t.border}`, background: t.inputBg, color: t.textSecondary, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "inherit" }}>
-                      <span style={{ width: 18, height: 18, borderRadius: 4, background: roleCfg.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "white", fontWeight: 700 }}>{s.icon}</span>
-                      {s.label}
-                    </motion.button>
-                  ))}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                  <div style={{ flex: 1, height: 1, background: t.border }} />
-                  <span style={{ fontSize: 12, color: t.textMuted }}>or continue with email</span>
-                  <div style={{ flex: 1, height: 1, background: t.border }} />
-                </div>
-              </>
-            )}
-
-            {/* Signup name fields */}
             {mode === "signup" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-               {["First Name", "Last Name"].map(p => (
-                  <div key={p}>
-                    <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>{p}</label>
-                    <input placeholder={p} onKeyDown={(e) => { if(e.key==="Enter") handleSubmit(); }}
-                      style={inputStyle(false)} />
-                  </div>
-                ))}
+                <div>
+                  <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>First Name</label>
+                  <input placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} onKeyDown={handleKeyDown} style={inputStyle(!!firstName)} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>Last Name</label>
+                  <input placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} onKeyDown={handleKeyDown} style={inputStyle(!!lastName)} />
+                </div>
               </div>
             )}
 
-            {/* Email */}
             <div style={{ marginBottom: 16 }}>
               <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>Email</label>
               <input
@@ -269,7 +253,6 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
               />
             </div>
 
-            {/* Password */}
             {mode !== "forgot" && (
               <div style={{ marginBottom: error ? 12 : 24, position: "relative" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -296,19 +279,17 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
               </div>
             )}
 
-            {/* Error message */}
             <AnimatePresence>
               {error && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                  style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: C.red, fontSize: 13, marginBottom: 16 }}
+                  style={{ padding: "10px 14px", borderRadius: 10, background: error.startsWith("✅") ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)", border: `1px solid ${error.startsWith("✅") ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.25)"}`, color: error.startsWith("✅") ? "#10B981" : C.red, fontSize: 13, marginBottom: 16 }}
                 >
-                  ⚠️ {error}
+                  {error}
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Submit button */}
             <motion.button
               whileHover={{ scale: 1.02, boxShadow: `0 8px 30px ${roleCfg.color}50` }}
               whileTap={{ scale: 0.97 }}
@@ -328,7 +309,7 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
                 <>
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                     style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white" }} />
-                  Signing in...
+                  {mode === "login" ? "Signing in..." : mode === "signup" ? "Creating account..." : "Sending..."}
                 </>
               ) : (
                 <>
@@ -337,7 +318,6 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
               )}
             </motion.button>
 
-            {/* Footer links */}
             <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${t.border}`, textAlign: "center", fontSize: 13, color: t.textSecondary }}>
               {mode === "login" ? (
                 <>Don't have an account?{" "}
@@ -355,7 +335,6 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
             </div>
           </GlassCard>
 
-          {/* Back to landing */}
           <div style={{ textAlign: "center", marginTop: 20 }}>
             <span style={{ fontSize: 13, color: t.textMuted, cursor: "pointer" }} onClick={() => setPage("landing")}>
               ← Back to home
