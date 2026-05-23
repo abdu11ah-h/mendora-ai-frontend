@@ -50,8 +50,8 @@ const LandingPage = ({ setPage, dark, setDark }) => {
             <GlowButton dark={dark} onClick={() => setPage("signup")} style={{ fontSize: 16, padding: "14px 32px" }}>
               Start Your Journey ↗
             </GlowButton>
-            <GlowButton dark={dark} secondary onClick={() => setPage("dashboard")} style={{ fontSize: 16, padding: "14px 32px" }}>
-              View Demo
+            <GlowButton dark={dark} secondary onClick={() => setPage("login")} style={{ fontSize: 16, padding: "14px 32px" }}>
+              Sign In
             </GlowButton>
           </div>
         </motion.div>

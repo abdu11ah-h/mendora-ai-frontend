@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { authAPI } from "../lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
@@ -233,22 +234,64 @@ export const AdminPage = ({ dark }) => {
 };
 
 // ─── PROFILE PAGE ─────────────────────────────────────────────────────────────
-export const ProfilePage = ({ dark, setDark }) => {
+export const ProfilePage = ({ dark, setDark, user, onUserUpdate, onLogout }) => {
   const [notifs,     setNotifs]     = useState({ push: true, email: false, weekly: true, emergency: true });
   const [aiSettings, setAiSettings] = useState({ tone: "empathetic", language: "english", suggestions: true, nightMode: false });
   const [saved,      setSaved]      = useState(false);
+  const [firstName,  setFirstName]  = useState(user?.first_name || "");
+  const [lastName,   setLastName]   = useState(user?.last_name || "");
+  const [university, setUniversity] = useState(user?.university || "");
+  const [department, setDepartment] = useState(user?.department || "");
+  const [saveError,  setSaveError]  = useState("");
   const t = useTheme(dark);
+
+  useEffect(() => {
+    if (!user) return;
+    setFirstName(user.first_name || "");
+    setLastName(user.last_name || "");
+    setUniversity(user.university || "");
+    setDepartment(user.department || "");
+  }, [user]);
+
+  const handleSave = async () => {
+    setSaveError("");
+    try {
+      const updated = await authAPI.updateProfile({
+        first_name: firstName,
+        last_name: lastName,
+        university: university || null,
+        department: department || null,
+      });
+      onUserUpdate?.(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setSaveError(e.message);
+    }
+  };
+
+  if (!user) {
+    return (
+      <GlassCard dark={dark}>
+        <div style={{ color: t.textSecondary }}>Please sign in to view your profile.</div>
+      </GlassCard>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16 }}>
         {/* Profile card */}
         <GlassCard dark={dark} style={{ textAlign: "center" }}>
-          <div style={{ width: 100, height: 100, borderRadius: "50%", margin: "0 auto 16px", background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, boxShadow: `0 0 40px ${C.purple}40`, color: "white", fontWeight: 700 }}>SA</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: t.textPrimary }}>Sara Ahmed</div>
-          <div style={{ color: t.textSecondary, fontSize: 13, marginTop: 4 }}>Computer Science • Year 3</div>
+          <div style={{ width: 100, height: 100, borderRadius: "50%", margin: "0 auto 16px", background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, boxShadow: `0 0 40px ${C.purple}40`, color: "white", fontWeight: 700 }}>
+            {(user.first_name?.[0] || "") + (user.last_name?.[0] || "")}
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: t.textPrimary }}>{user.first_name} {user.last_name}</div>
+          <div style={{ color: t.textSecondary, fontSize: 13, marginTop: 4 }}>{user.email}</div>
           <div style={{ marginTop: 8 }}>
-            <span style={{ padding: "4px 12px", borderRadius: 20, background: "rgba(16,185,129,0.2)", color: C.green, fontSize: 12 }}>● Active</span>
+            <span style={{ padding: "4px 12px", borderRadius: 20, background: user.is_verified ? "rgba(16,185,129,0.2)" : "rgba(245,158,11,0.2)", color: user.is_verified ? C.green : C.amber, fontSize: 12 }}>
+              {user.is_verified ? "● Verified" : "○ Email not verified"}
+            </span>
           </div>
           <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {[{ label: "Check-ins", v: "47" }, { label: "Streak", v: "12d" }, { label: "Sessions", v: "23" }, { label: "Score", v: "78" }].map(s => (
@@ -265,13 +308,28 @@ export const ProfilePage = ({ dark, setDark }) => {
           <GlassCard dark={dark}>
             <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary, marginBottom: 16 }}>Edit Profile</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {[["First Name", "Sara"], ["Last Name", "Ahmed"], ["Email", "sara@uni.edu.pk"], ["Student ID", "CS-2022-047"]].map(([label, val]) => (
-                <div key={label}>
-                  <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>{label}</label>
-                  <input defaultValue={val} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.inputBg, color: t.textPrimary, fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
-                </div>
-              ))}
+              <div>
+                <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>First Name</label>
+                <input value={firstName} onChange={e => setFirstName(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.inputBg, color: t.textPrimary, fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>Last Name</label>
+                <input value={lastName} onChange={e => setLastName(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.inputBg, color: t.textPrimary, fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>Email</label>
+                <input value={user.email} readOnly style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.inputBg, color: t.textMuted, fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>University</label>
+                <input value={university} onChange={e => setUniversity(e.target.value)} placeholder="Your university" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.inputBg, color: t.textPrimary, fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={{ fontSize: 12, color: t.textSecondary, display: "block", marginBottom: 6 }}>Department</label>
+                <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="e.g. Computer Science" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.inputBg, color: t.textPrimary, fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+              </div>
             </div>
+            {saveError && <div style={{ color: C.red, fontSize: 12, marginTop: 10 }}>{saveError}</div>}
           </GlassCard>
 
           {/* Notifications */}
@@ -333,8 +391,8 @@ export const ProfilePage = ({ dark, setDark }) => {
           </GlassCard>
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
-            <GlowButton dark={dark} secondary>Cancel</GlowButton>
-            <GlowButton dark={dark} onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000); }}>
+            {onLogout && <GlowButton dark={dark} secondary onClick={onLogout}>Sign out</GlowButton>}
+            <GlowButton dark={dark} onClick={handleSave}>
               {saved ? "✓ Saved!" : "Save Changes"}
             </GlowButton>
           </div>

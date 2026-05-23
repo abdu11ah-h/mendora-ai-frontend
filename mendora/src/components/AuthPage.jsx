@@ -70,7 +70,7 @@ const RoleCard = ({ role, selected, onSelect, dark }) => {
 };
 
 // ─── AUTH PAGE ────────────────────────────────────────────────────────────────
-const AuthPage = ({ mode, setPage, setRole, dark }) => {
+const AuthPage = ({ mode, setPage, setRole, dark, onAuth }) => {
   const [email, setEmail]           = useState("");
   const [password, setPassword]     = useState("");
   const [firstName, setFirstName]   = useState("");
@@ -79,6 +79,7 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
   const [selectedRole, setSelectedRole] = useState("student");
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState("");
+  const [pendingVerifyEmail, setPendingVerifyEmail] = useState("");
   const t = useTheme(dark);
   const roleCfg = ROLES[selectedRole];
 
@@ -93,22 +94,32 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
         await authAPI.login(email, password);
         const me = await authAPI.me();
         setUser(me);
+        if (onAuth) onAuth(me);
         if (setRole) setRole(me.role);
         setPage(ROLES[me.role]?.defaultPage || "dashboard");
       } else if (mode === "signup") {
-        await authAPI.register({
+        const result = await authAPI.register({
           email, password,
           first_name: firstName || "User",
           last_name: lastName || "User",
           role: selectedRole
         });
-        setError("✅ Registered! Please check your email to verify your account.");
+        if (result?.verified) {
+          setError("✅ Account created! You can sign in now.");
+        } else {
+          setPendingVerifyEmail(email);
+          setError("✅ Registered! Check your email to verify, then sign in. Didn't get it? Use Resend below.");
+        }
       } else {
         await authAPI.forgotPassword(email);
         setError("✅ Reset link sent to your email!");
       }
     } catch (err) {
-      setError(err.message);
+      const msg = err.message || "Something went wrong";
+      if (msg.toLowerCase().includes("verify")) {
+        setPendingVerifyEmail(email);
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -289,6 +300,28 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {pendingVerifyEmail && (
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.01 }}
+                disabled={loading}
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    await authAPI.resendVerification(pendingVerifyEmail);
+                    setError("✅ Verification email sent again. Check spam folder.");
+                  } catch (e) {
+                    setError(e.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                style={{ width: "100%", marginBottom: 16, padding: "10px", borderRadius: 10, border: `1px solid ${roleCfg.color}55`, background: "transparent", color: roleCfg.color, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}
+              >
+                Resend verification email
+              </motion.button>
+            )}
 
             <motion.button
               whileHover={{ scale: 1.02, boxShadow: `0 8px 30px ${roleCfg.color}50` }}

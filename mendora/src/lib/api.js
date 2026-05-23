@@ -67,6 +67,9 @@ export const authAPI = {
 
   verifyEmail: (token) => api("/auth/verify-email", { method: "POST", body: JSON.stringify({ token }) }),
 
+  resendVerification: (email) =>
+    api("/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }),
+
   updateProfile: (body) => api("/auth/me", { method: "PUT", body: JSON.stringify(body) }),
 };
 

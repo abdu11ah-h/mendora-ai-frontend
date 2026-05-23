@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { C, useTheme } from "../lib/theme";
+import { userInitials } from "../lib/userHelpers";
 
 // ─── NAV ITEMS (role-aware) ────────────────────────────────────────────────────
 const ALL_NAV = [
@@ -68,7 +69,7 @@ const NotificationsPanel = ({ open, onClose, dark }) => {
 };
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
-export const Sidebar = ({ page, setPage, collapsed, setCollapsed, dark, role = "student" }) => {
+export const Sidebar = ({ page, setPage, collapsed, setCollapsed, dark, role = "student", user, onLogout }) => {
   const t = useTheme(dark);
   const navItems = ALL_NAV.filter(n => n.roles.includes(role));
 
@@ -112,8 +113,19 @@ export const Sidebar = ({ page, setPage, collapsed, setCollapsed, dark, role = "
         })}
       </nav>
 
-      {/* Collapse toggle */}
+      {/* User + logout */}
       <div style={{ padding: 16, borderTop: `1px solid ${t.border}` }}>
+        {!collapsed && user && (
+          <div style={{ fontSize: 12, color: t.textSecondary, marginBottom: 10, overflow: "hidden", textOverflow: "ellipsis" }}>
+            {user.first_name} {user.last_name}
+          </div>
+        )}
+        {onLogout && (
+          <motion.button whileHover={{ scale: 1.02 }} onClick={onLogout}
+            style={{ width: "100%", padding: "8px", marginBottom: 8, borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.textSecondary, cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>
+            {collapsed ? "⎋" : "Sign out"}
+          </motion.button>
+        )}
         <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
           onClick={() => setCollapsed(!collapsed)}
           style={{ width: "100%", padding: "8px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.textSecondary, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>
@@ -125,7 +137,7 @@ export const Sidebar = ({ page, setPage, collapsed, setCollapsed, dark, role = "
 };
 
 // ─── TOP NAVBAR ───────────────────────────────────────────────────────────────
-export const TopNav = ({ page, setPage, dark, setDark, role = "student" }) => {
+export const TopNav = ({ page, setPage, dark, setDark, role = "student", user }) => {
   const t = useTheme(dark);
   const [notifOpen, setNotifOpen] = useState(false);
   const navItems = ALL_NAV.filter(n => n.roles.includes(role));
@@ -168,8 +180,12 @@ export const TopNav = ({ page, setPage, dark, setDark, role = "student" }) => {
           </motion.button>
 
           {/* Avatar */}
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, cursor: "pointer", fontWeight: 700, color: "white" }}>
-            {role === "admin" ? "AD" : role === "counselor" ? "CR" : "SA"}
+          <div
+            onClick={() => setPage("profile")}
+            title={user?.email || "Profile"}
+            style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, cursor: "pointer", fontWeight: 700, color: "white" }}
+          >
+            {user ? userInitials(user) : role === "admin" ? "AD" : role === "counselor" ? "CR" : "?"}
           </div>
         </div>
       </div>
