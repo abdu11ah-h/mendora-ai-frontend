@@ -85,7 +85,7 @@ const AuthPage = ({ mode, setPage, setRole, dark }) => {
   const handleSubmit = async () => {
     if (!email) { setError("Please enter your email."); return; }
     if (mode !== "forgot" && !password) { setError("Please enter your password."); return; }
-    if (mode !== "forgot" && password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (mode === "signup" && password.length < 8) { setError("Password must be at least 8 characters."); return; }
     setError("");
     setLoading(true);
     try {

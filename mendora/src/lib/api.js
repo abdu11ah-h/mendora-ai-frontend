@@ -1,7 +1,7 @@
 // --- MENDORA AI API CLIENT ---
 // Connects frontend to Railway backend
 
-const API_URL = import.meta.env.VITE_API_URL || "https://web-production-641ef.up.railway.app/api/v1";
+const API_URL = (import.meta.env.VITE_API_URL || "https://web-production-641ef.up.railway.app/api/v1").trim().replace(/\/$/, "");
 
 // --- Token helpers ---
 export const getToken = () => localStorage.getItem("mendora_token");
@@ -18,12 +18,27 @@ async function api(path, options = {}) {
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  let res;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch (e) {
+    throw new Error(
+      "Cannot reach the API server. Confirm the backend is deployed, then restart the frontend (npm run dev) so VITE_API_URL is loaded."
+    );
+  }
 
   if (res.status === 401) { clearTokens(); window.location.reload(); return; }
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || "Something went wrong");
+  if (!res.ok) {
+    const detail = data.detail;
+    const msg = Array.isArray(detail)
+      ? detail.map((d) => d.msg || JSON.stringify(d)).join(". ")
+      : typeof detail === "string"
+        ? detail
+        : "Something went wrong";
+    throw new Error(msg);
+  }
   return data;
 }
 

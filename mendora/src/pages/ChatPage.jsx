@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { C, useTheme } from "../lib/theme";
-import { getAIResponse, detectCrisis, detectHardBlock, detectEmotion, HIGH_STRESS_THRESHOLD, getBreakRecommendation, COMMUNITY_GUIDELINES } from "../lib/aiEngine";
+import { detectCrisis, detectHardBlock, detectEmotion, HIGH_STRESS_THRESHOLD, getBreakRecommendation, COMMUNITY_GUIDELINES } from "../lib/aiEngine";
 import { GlassCard, GlowButton, EmotionBadge } from "../components/ui";
-import { initialChatMessages, chatHistory, suggestions } from "../data/mockData";
+import { suggestions } from "../data/mockData";
+import { chatAPI } from "../lib/api";
 
 const TONE_OPTIONS = [
   { key: "calm",         label: "Calm",        icon: "🌿" },
@@ -18,15 +19,15 @@ const SUBJECT_OPTIONS = [
   { key: "chemistry",  label: "Chemistry",  icon: "🧪" },
   { key: "biology",    label: "Biology",    icon: "🧬" },
   { key: "cs",         label: "CS",         icon: "💻" },
-  { key: "english",    label: "English",    icon: "📖" },
+  { key: "english",    label: "English",    icon: "📝" },
   { key: "history",    label: "History",    icon: "🏛️" },
-  { key: "economics",  label: "Economics",  icon: "📈" },
+  { key: "economics",  label: "Economics",  icon: "📊" },
   { key: "psychology", label: "Psychology", icon: "🧠" },
 ];
 
 const INACTIVITY_MINUTES = 3;
 
-// ── SOS Modal ─────────────────────────────────────────────────────────────────
+// ── SOS Modal ──
 const SOSModal = ({ onClose, dark }) => {
   const t = useTheme(dark);
   const [alertSent, setAlertSent] = useState(false);
@@ -41,14 +42,10 @@ const SOSModal = ({ onClose, dark }) => {
           <div style={{ fontSize: 20, fontWeight: 800, color: C.red, marginBottom: 6 }}>Crisis Support</div>
           <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.7 }}>You are not alone. Help is available right now.</div>
         </div>
-        <motion.div style={{ padding: "14px 18px", borderRadius: 14, background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.3)", marginBottom: 16, textAlign: "center" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.purpleLight, marginBottom: 4 }}>First — breathe with me</div>
-          <div style={{ fontSize: 12, color: t.textSecondary, lineHeight: 1.7 }}>Breathe in slowly for 4 counts... hold for 4... breathe out for 6.</div>
-        </motion.div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
           {[
             { label: "Umang Helpline (Pakistan)", number: "0311-7786264", icon: "📞", color: C.green },
-            { label: "Rozan Counseling",           number: "051-2890505", icon: "💬", color: C.cyan  },
+            { label: "Rozan Counseling",           number: "051-2890505", icon: "🏥", color: C.cyan  },
             { label: "Umang 24/7 WhatsApp",        number: "0317-4288665",icon: "📱", color: C.purple},
             { label: "Emergency Services",          number: "1122",        icon: "🚨", color: C.red   },
           ].map(h => (
@@ -82,7 +79,7 @@ const SOSModal = ({ onClose, dark }) => {
   );
 };
 
-// ── Guidelines Modal ──────────────────────────────────────────────────────────
+// ── Guidelines Modal ──
 const GuidelinesModal = ({ onClose, dark }) => {
   const t = useTheme(dark);
   const [accepted, setAccepted] = useState(false);
@@ -95,7 +92,7 @@ const GuidelinesModal = ({ onClose, dark }) => {
         <div style={{ textAlign: "center", marginBottom: 22 }}>
           <div style={{ fontSize: 36, marginBottom: 10 }}>📋</div>
           <div style={{ fontSize: 18, fontWeight: 800, color: t.textPrimary, marginBottom: 6 }}>Community Guidelines</div>
-          <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.6 }}>Mendora AI is a safe, supportive space. These guidelines keep it that way.</div>
+          <div style={{ fontSize: 13, color: t.textSecondary, lineHeight: 1.6 }}>Mendora AI is a safe, supportive space.</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
           {COMMUNITY_GUIDELINES.map((g, i) => (
@@ -112,7 +109,7 @@ const GuidelinesModal = ({ onClose, dark }) => {
         {!accepted ? (
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setAccepted(true)}
             style={{ width: "100%", padding: 13, borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${C.purple}, ${C.indigo})`, color: "white", cursor: "pointer", fontSize: 14, fontWeight: 700, fontFamily: "inherit" }}>
-            ✓ I understand and agree
+            ✔ I understand and agree
           </motion.button>
         ) : (
           <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
@@ -130,7 +127,7 @@ const GuidelinesModal = ({ onClose, dark }) => {
   );
 };
 
-// ── High Stress Alert ─────────────────────────────────────────────────────────
+// ── High Stress Alert ──
 const HighStressAlert = ({ onDismiss, onSOS, dark }) => {
   const t = useTheme(dark);
   return (
@@ -139,7 +136,7 @@ const HighStressAlert = ({ onDismiss, onSOS, dark }) => {
       <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 1, repeat: Infinity }} style={{ fontSize: 28, flexShrink: 0 }}>🚨</motion.div>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 3 }}>High Stress Detected</div>
-        <div style={{ fontSize: 12, color: t.textSecondary, lineHeight: 1.5 }}>Your stress indicators are very high. Please take a moment — you don't have to push through alone.</div>
+        <div style={{ fontSize: 12, color: t.textSecondary, lineHeight: 1.5 }}>Your stress indicators are very high. Please take a moment.</div>
       </div>
       <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
         <motion.button whileHover={{ scale: 1.05 }} onClick={onSOS}
@@ -151,33 +148,48 @@ const HighStressAlert = ({ onDismiss, onSOS, dark }) => {
   );
 };
 
-// ─── CHAT PAGE ────────────────────────────────────────────────────────────────
+// ── CHAT PAGE ──
 const ChatPage = ({ dark }) => {
-  const [messages, setMessages]         = useState(initialChatMessages);
+  const [messages, setMessages]         = useState([{ id: Date.now(), role: "ai", text: "Hi! I'm Mendora 💜 How are you feeling today?", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Welcoming" }]);
   const [input, setInput]               = useState("");
   const [typing, setTyping]             = useState(false);
   const [emotion, setEmotion]           = useState("Welcoming");
-  const [activeHistory, setActiveHistory] = useState("h1");
-  const [chatSessions, setChatSessions] = useState(chatHistory);
+  const [chatSessions, setChatSessions] = useState([]);
+  const [activeSession, setActiveSession] = useState(null);
   const [tone, setTone]                 = useState("calm");
   const [subject, setSubject]           = useState(null);
-  const [pomodoroSessions, setPomodoroSessions] = useState(0);
   const [showSOS, setShowSOS]           = useState(false);
   const [showGuidelines, setShowGuidelines] = useState(false);
   const [showStressAlert, setShowStressAlert] = useState(false);
   const [stressAlertDismissed, setStressAlertDismissed] = useState(false);
   const [stressScore, setStressScore]   = useState(40);
   const [lateNightNudgeSent, setLateNightNudgeSent] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const inactivityTimer = useRef(null);
   const endRef = useRef(null);
   const t = useTheme(dark);
+
+  // Load chat sessions on mount
+  useEffect(() => {
+    const loadSessions = async () => {
+      try {
+        const sessions = await chatAPI.getSessions();
+        setChatSessions(sessions || []);
+      } catch (e) {
+        console.error("Failed to load sessions", e);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+    loadSessions();
+  }, []);
 
   const resetInactivityTimer = () => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     inactivityTimer.current = setTimeout(() => {
       setMessages(prev => [...prev, {
         id: Date.now(), role: "ai",
-        text: "💜 Just checking in — it's been a little while. How are you feeling right now? I'm here whenever you're ready.",
+        text: "💜 Just checking in — it's been a little while. How are you feeling right now?",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         emotion: "Empathetic", isCheckin: true,
       }]);
@@ -187,44 +199,49 @@ const ChatPage = ({ dark }) => {
   useEffect(() => { resetInactivityTimer(); return () => clearTimeout(inactivityTimer.current); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, typing]);
 
-  const startNewChat = () => {
-    const firstUser = messages.find(m => m.role === "user");
-    if (firstUser) {
-      const entry = { id: `h${Date.now()}`, title: firstUser.text.slice(0, 28) + (firstUser.text.length > 28 ? "…" : ""), time: "Just now", preview: firstUser.text };
-      setChatSessions(prev => [entry, ...prev]);
-      setActiveHistory(entry.id);
+  const startNewChat = async () => {
+    try {
+      const session = await chatAPI.createSession(null);
+      setActiveSession(session.id);
+      setChatSessions(prev => [session, ...prev]);
+      setMessages([{ id: Date.now(), role: "ai", text: "Hello again! 💜 What's on your mind right now?", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Welcoming" }]);
+      setInput(""); setEmotion("Welcoming"); setStressScore(40);
+      setStressAlertDismissed(false); setLateNightNudgeSent(false);
+    } catch (e) {
+      console.error(e);
     }
-    setMessages([{ id: Date.now(), role: "ai", text: "Hello again! 💜 What's on your mind right now?", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Welcoming" }]);
-    setInput(""); setEmotion("Welcoming"); setStressScore(40);
-    setStressAlertDismissed(false); setLateNightNudgeSent(false);
   };
 
-  const switchSession = (id) => {
-    setActiveHistory(id);
-    setMessages([{ id: Date.now(), role: "ai", text: "You're viewing a past session. Start typing to continue or click '+ New Chat'. 💜", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Welcoming" }]);
+  const switchSession = async (id) => {
+    try {
+      const session = await chatAPI.getSession(id);
+      setActiveSession(id);
+      const mapped = session.messages.map(m => ({
+        id: m.id, role: m.role === "ai" ? "ai" : "user",
+        text: m.content,
+        time: new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        emotion: m.detected_emotion || "Neutral",
+      }));
+      setMessages(mapped.length > 0 ? mapped : [{ id: Date.now(), role: "ai", text: "Continuing this session 💜 What's on your mind?", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Welcoming" }]);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const send = (text) => {
+  const send = async (text) => {
     const trimmed = (text || input).trim();
     if (!trimmed) return;
     resetInactivityTimer();
 
-    if (detectCrisis(trimmed)) {
-      setMessages(prev => [...prev, { id: Date.now(), role: "user", text: trimmed, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Crisis" }]);
-      setInput(""); setTyping(true);
-      setTimeout(() => {
-        setTyping(false);
-        setMessages(prev => [...prev, { id: Date.now() + 1, role: "ai", text: "💜 I hear you, and I'm really glad you reached out. You don't have to carry this alone — I'm opening the crisis support panel for you.", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Empathetic" }]);
-        setTimeout(() => setShowSOS(true), 800);
-      }, 1200);
-      return;
-    }
-
-    const hour = new Date().getHours();
-    const isLateNight = hour >= 23 || hour < 4;
     const detectedEmotion = detectEmotion(trimmed);
     setEmotion(detectedEmotion);
 
+    // Add user message to UI immediately
+    setMessages(prev => [...prev, { id: Date.now(), role: "user", text: trimmed, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: detectedEmotion }]);
+    setInput("");
+    setTyping(true);
+
+    // Stress tracking
     const stressWords = ["stress","overwhelm","panic","anxious","scared","can't","failing","tired","burnout","pressure"];
     const hits = stressWords.filter(w => trimmed.toLowerCase().includes(w)).length;
     setStressScore(prev => {
@@ -233,17 +250,37 @@ const ChatPage = ({ dark }) => {
       return next;
     });
 
-    setMessages(prev => [...prev, { id: Date.now(), role: "user", text: trimmed, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: detectedEmotion }]);
-    setInput(""); setTyping(true);
-
-    setTimeout(() => {
-      setTyping(false);
-      setMessages(prev => [...prev, { id: Date.now() + 1, role: "ai", text: getAIResponse(trimmed, tone), time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Supportive" }]);
-      if (isLateNight && !lateNightNudgeSent) {
-        setLateNightNudgeSent(true);
-        setTimeout(() => setMessages(prev => [...prev, { id: Date.now() + 2, role: "ai", text: "🌙 I noticed it's past 11 PM. Late-night studying can feel productive, but your brain retains information better after proper sleep. Consider wrapping up in 30 minutes — you'll actually remember more. Take care of yourself 💜", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Supportive", isNudge: true }]), 2000);
+    try {
+      // Create session if none exists
+      let sessionId = activeSession;
+      if (!sessionId) {
+        const session = await chatAPI.createSession(trimmed.slice(0, 60));
+        sessionId = session.id;
+        setActiveSession(sessionId);
+        setChatSessions(prev => [session, ...prev]);
       }
-    }, 1600);
+
+      // Send to real Gemini backend
+      const result = await chatAPI.sendMessage(sessionId, trimmed);
+      setTyping(false);
+
+      if (result.crisis) {
+        setMessages(prev => [...prev, { id: Date.now(), role: "ai", text: result.ai_response, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Empathetic" }]);
+        setTimeout(() => setShowSOS(true), 800);
+      } else {
+        setMessages(prev => [...prev, { id: Date.now(), role: "ai", text: result.ai_response, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Supportive" }]);
+      }
+
+      // Late night nudge
+      const hour = new Date().getHours();
+      if ((hour >= 23 || hour < 4) && !lateNightNudgeSent) {
+        setLateNightNudgeSent(true);
+        setTimeout(() => setMessages(prev => [...prev, { id: Date.now(), role: "ai", text: "🌙 I noticed it's late. Your brain retains information better after sleep. Take care of yourself 💜", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Supportive", isNudge: true }]), 2000);
+      }
+    } catch (e) {
+      setTyping(false);
+      setMessages(prev => [...prev, { id: Date.now(), role: "ai", text: "I'm having trouble connecting right now. Please try again in a moment 💜", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), emotion: "Supportive" }]);
+    }
   };
 
   return (
@@ -264,11 +301,15 @@ const ChatPage = ({ dark }) => {
       <GlassCard dark={dark} style={{ display: "flex", flexDirection: "column", padding: 0, overflow: "hidden", minHeight: 0 }}>
         <div style={{ padding: "14px 16px", borderBottom: `1px solid ${t.border}`, fontSize: 13, fontWeight: 600, color: t.textPrimary }}>Chat History</div>
         <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
-          {chatSessions.map(h => (
+          {loadingHistory ? (
+            <div style={{ padding: 12, fontSize: 12, color: t.textMuted }}>Loading...</div>
+          ) : chatSessions.length === 0 ? (
+            <div style={{ padding: 12, fontSize: 12, color: t.textMuted }}>No previous chats</div>
+          ) : chatSessions.map(h => (
             <motion.div key={h.id} whileHover={{ x: 2 }} onClick={() => switchSession(h.id)}
-              style={{ padding: "10px 12px", borderRadius: 10, cursor: "pointer", marginBottom: 4, background: activeHistory === h.id ? "rgba(124,58,237,0.2)" : "transparent", border: `1px solid ${activeHistory === h.id ? C.purple : "transparent"}` }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: t.textPrimary, marginBottom: 2 }}>{h.title}</div>
-              <div style={{ fontSize: 11, color: t.textMuted }}>{h.time}</div>
+              style={{ padding: "10px 12px", borderRadius: 10, cursor: "pointer", marginBottom: 4, background: activeSession === h.id ? "rgba(124,58,237,0.2)" : "transparent", border: `1px solid ${activeSession === h.id ? C.purple : "transparent"}` }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: t.textPrimary, marginBottom: 2 }}>{h.title || "Untitled"}</div>
+              <div style={{ fontSize: 11, color: t.textMuted }}>{new Date(h.created_at).toLocaleDateString()}</div>
             </motion.div>
           ))}
         </div>
@@ -279,12 +320,11 @@ const ChatPage = ({ dark }) => {
 
       {/* Main Chat */}
       <GlassCard dark={dark} style={{ display: "flex", flexDirection: "column", padding: 0, overflow: "hidden", minHeight: 0 }}>
-        {/* Header */}
         <div style={{ padding: "14px 20px", borderBottom: `1px solid ${t.border}`, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-          <div style={{ width: 40, height: 40, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.cyan})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🤖</div>
+          <div style={{ width: 40, height: 40, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.cyan})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>💛</div>
           <div>
             <div style={{ fontSize: 15, fontWeight: 600, color: t.textPrimary }}>Mendora AI</div>
-            <div style={{ fontSize: 12, color: C.green }}>● Online • Emotionally intelligent</div>
+            <div style={{ fontSize: 12, color: C.green }}>● Online · Powered by Gemini</div>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ padding: "4px 10px", borderRadius: 20, background: stressScore >= HIGH_STRESS_THRESHOLD ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)", border: `1px solid ${stressScore >= HIGH_STRESS_THRESHOLD ? "rgba(239,68,68,0.5)" : t.border}`, fontSize: 11, color: stressScore >= HIGH_STRESS_THRESHOLD ? C.red : t.textMuted, fontWeight: 600 }}>
@@ -298,25 +338,15 @@ const ChatPage = ({ dark }) => {
           </div>
         </div>
 
-        {/* Tone + Subject bar */}
-        <div style={{ padding: "7px 14px", borderBottom: `1px solid ${t.border}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0, overflowX: "hidden" }}>
-          <span style={{ fontSize: 10, color: t.textMuted, whiteSpace: "nowrap", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Tone</span>
+        {/* Tone bar */}
+        <div style={{ padding: "7px 14px", borderBottom: `1px solid ${t.border}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 10, color: t.textMuted, whiteSpace: "nowrap", fontWeight: 600, textTransform: "uppercase" }}>Tone</span>
           {TONE_OPTIONS.map(opt => (
             <motion.button key={opt.key} whileTap={{ scale: 0.95 }} onClick={() => setTone(opt.key)}
               style={{ padding: "4px 10px", borderRadius: 20, flexShrink: 0, border: `1px solid ${tone === opt.key ? C.purple : t.border}`, background: tone === opt.key ? "rgba(124,58,237,0.22)" : "transparent", color: tone === opt.key ? C.purpleLight : t.textSecondary, fontSize: 11, cursor: "pointer", fontWeight: tone === opt.key ? 600 : 400, fontFamily: "inherit" }}>
               {opt.icon} {opt.label}
             </motion.button>
           ))}
-          <div style={{ width: 1, height: 18, background: t.border, flexShrink: 0 }} />
-          <span style={{ fontSize: 10, color: t.textMuted, whiteSpace: "nowrap", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Subject</span>
-          <div style={{ display: "flex", gap: 5, overflowX: "auto", flexShrink: 1, scrollbarWidth: "none" }}>
-            {SUBJECT_OPTIONS.map(opt => (
-              <motion.button key={String(opt.key)} whileTap={{ scale: 0.95 }} onClick={() => setSubject(opt.key)}
-                style={{ padding: "4px 9px", borderRadius: 14, flexShrink: 0, border: `1px solid ${subject === opt.key ? C.cyan : t.border}`, background: subject === opt.key ? "rgba(6,182,212,0.18)" : "transparent", color: subject === opt.key ? C.cyanLight : t.textSecondary, fontSize: 11, cursor: "pointer", fontWeight: subject === opt.key ? 600 : 400, whiteSpace: "nowrap", fontFamily: "inherit" }}>
-                {opt.icon} {opt.label}
-              </motion.button>
-            ))}
-          </div>
         </div>
 
         {/* Messages */}
@@ -326,7 +356,7 @@ const ChatPage = ({ dark }) => {
               style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", gap: 10, alignItems: "flex-end" }}>
               {msg.role === "ai" && (
                 <div style={{ width: 30, height: 30, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.cyan})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>
-                  {msg.isNudge ? "🌙" : msg.isCheckin ? "💜" : "🤖"}
+                  {msg.isNudge ? "🌙" : msg.isCheckin ? "💜" : "💛"}
                 </div>
               )}
               <div>
@@ -340,7 +370,7 @@ const ChatPage = ({ dark }) => {
           ))}
           {typing && (
             <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.cyan})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🤖</div>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.cyan})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>💛</div>
               <div style={{ padding: "13px 17px", borderRadius: "18px 18px 18px 4px", background: dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.9)", border: `1px solid ${t.border}` }}>
                 <div style={{ display: "flex", gap: 4 }}>
                   {[0, 1, 2].map(i => <motion.div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: C.purple }} animate={{ y: [0, -6, 0] }} transition={{ duration: 0.8, delay: i * 0.15, repeat: Infinity }} />)}
@@ -364,20 +394,19 @@ const ChatPage = ({ dark }) => {
           <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()}
             placeholder="Share what's on your mind..."
             style={{ flex: 1, padding: "12px 16px", borderRadius: 12, border: `1px solid ${t.border}`, background: t.inputBg, color: t.textPrimary, fontSize: 14, outline: "none", fontFamily: "inherit" }} />
-          <GlowButton dark={dark} small onClick={() => send()}>Send ↗</GlowButton>
+          <GlowButton dark={dark} small onClick={() => send()}>Send →</GlowButton>
         </div>
       </GlassCard>
 
       {/* Right panel */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" }}>
-        {/* SOS quick button */}
         <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => setShowSOS(true)}
           style={{ width: "100%", padding: "12px", borderRadius: 12, border: "1px solid rgba(239,68,68,0.5)", background: "rgba(239,68,68,0.1)", color: C.red, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit" }}>
           🆘 Crisis Support
         </motion.button>
 
         <GlassCard dark={dark} style={{ padding: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: t.textPrimary, marginBottom: 10 }}>💬 More Prompts</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: t.textPrimary, marginBottom: 10 }}>💼 More Prompts</div>
           {suggestions.slice(3).map(s => (
             <motion.button key={s} whileHover={{ x: 3 }} onClick={() => send(s)}
               style={{ width: "100%", textAlign: "left", padding: "8px 0", border: "none", borderBottom: `1px solid ${t.border}`, background: "transparent", color: t.textSecondary, cursor: "pointer", fontSize: 12, display: "flex", gap: 6, fontFamily: "inherit" }}>
@@ -387,10 +416,10 @@ const ChatPage = ({ dark }) => {
         </GlassCard>
 
         <GlassCard dark={dark} style={{ padding: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: t.textPrimary, marginBottom: 10 }}>📊 Session Stats</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: t.textPrimary, marginBottom: 10 }}>📈 Session Stats</div>
           {[
             { label: "Messages Today", value: messages.filter(m => m.role === "user").length },
-            { label: "Pomodoros Done", value: pomodoroSessions },
+            { label: "Active Sessions", value: chatSessions.length },
             { label: "Current Stress", value: `${stressScore}%` },
           ].map(s => (
             <div key={s.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
