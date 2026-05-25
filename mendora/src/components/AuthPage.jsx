@@ -95,8 +95,9 @@ const AuthPage = ({ mode, setPage, setRole, dark, onAuth }) => {
         const me = await authAPI.me();
         setUser(me);
         if (onAuth) onAuth(me);
-        if (setRole) setRole(me.role);
-        setPage(ROLES[me.role]?.defaultPage || "dashboard");
+  if (setRole) setRole(me.role);
+        if (onAuth) onAuth(me);
+        setPage(me.role === "admin" ? "admin" : me.role === "counselor" ? "counselor" : "dashboard");
       } else if (mode === "signup") {
         const result = await authAPI.register({
           email, password,
