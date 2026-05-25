@@ -90,15 +90,20 @@ const AuthPage = ({ mode, setPage, setRole, dark, onAuth }) => {
     setError("");
     setLoading(true);
     try {
-      if (mode === "login") {
+     if (mode === "login") {
         await authAPI.login(email, password);
         const me = await authAPI.me();
+        if (me.role !== selectedRole) {
+          setError(`This account is a "${me.role}" account. Please select the "${me.role}" role.`);
+          setLoading(false);
+          return;
+        }
         setUser(me);
-        if (onAuth) onAuth(me);
-  if (setRole) setRole(me.role);
+        if (setRole) setRole(me.role);
         if (onAuth) onAuth(me);
         setPage(me.role === "admin" ? "admin" : me.role === "counselor" ? "counselor" : "dashboard");
-      } else if (mode === "signup") {
+      } 
+else if (mode === "signup") {
         const result = await authAPI.register({
           email, password,
           first_name: firstName || "User",
