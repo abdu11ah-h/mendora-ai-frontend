@@ -533,7 +533,7 @@ export const FocusPage = ({ dark }) => {
           <GlassCard dark={dark}>
             <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary, marginBottom: 16 }}>📈 This Week's Focus Hours</div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={productivityData}>
+              <BarChart data={[]}>
                 <XAxis dataKey="day" tick={{ fill: t.textSecondary, fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: t.textSecondary, fontSize: 12 }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ background: t.tooltipBg, border: `1px solid ${t.border}`, borderRadius: 8, color: t.textPrimary }} />
