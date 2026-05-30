@@ -104,7 +104,13 @@ export const focusAPI = {
 export const adminAPI = {
   getUsers: (page = 1) => api(`/admin/users?page=${page}`),
   getUser: (id) => api(`/admin/users/${id}`),
-  updateUser: (id, body) => api(`/admin/users/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  updateUser: (id, { is_active, role } = {}) => {
+    const params = new URLSearchParams();
+    if (is_active !== undefined) params.set("is_active", String(is_active));
+    if (role) params.set("role", role);
+    const qs = params.toString();
+    return api(`/admin/users/${id}${qs ? `?${qs}` : ""}`, { method: "PUT" });
+  },
   deleteUser: (id) => api(`/admin/users/${id}`, { method: "DELETE" }),
   getStats: () => api("/admin/stats"),
   getRiskFlags: () => api("/admin/risk-flags"),

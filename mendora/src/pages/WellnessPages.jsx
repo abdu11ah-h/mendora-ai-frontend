@@ -8,10 +8,15 @@ import {
 } from "recharts";
 import { C, useTheme } from "../lib/theme";
 import { GlassCard, StatCard, GlowButton, ProgressBar, EmotionBadge } from "../components/ui";
-import {
-  moodData, weeklyWellness, burnoutData, productivityData,
-  wellnessPieData, pieColors, moods, moodHistory,
-} from "../data/mockData";
+import { moods, pieColors } from "../data/mockData";
+import { wellnessAPI, focusAPI } from "../lib/api";
+
+const formatLogDate = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+
+const moodEmoji = (value) => moods.find((m) => m.value === value)?.emoji || "😐";
 
 // ─── MOOD PAGE ────────────────────────────────────────────────────────────────
 export const MoodPage = ({ dark }) => {
@@ -21,14 +26,63 @@ export const MoodPage = ({ dark }) => {
   const [energy, setEnergy]   = useState(68);
   const [journal, setJournal] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [chartData, setChartData] = useState([]);
+  const [loadError, setLoadError] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const t = useTheme(dark);
 
-  const handleSubmit = () => {
+  const loadMoodData = async () => {
+    try {
+      const [logs, chart] = await Promise.all([
+        wellnessAPI.getMoodHistory(30),
+        wellnessAPI.getMoodChart(),
+      ]);
+      setHistory(
+        (logs || []).map((log) => ({
+          date: formatLogDate(log.logged_at),
+          mood: log.mood,
+          emoji: log.emoji || moodEmoji(log.mood),
+          note: log.journal_note || `Mood: ${log.mood} · Stress ${log.stress_level}%`,
+          stress: log.stress_level,
+        }))
+      );
+      setChartData(
+        (chart || []).map((row) => ({
+          day: row.date,
+          mood: row.mood_score ?? 0,
+          energy: row.energy ?? 0,
+        }))
+      );
+      setLoadError("");
+    } catch (e) {
+      setLoadError(e.message);
+    }
+  };
+
+  useEffect(() => { loadMoodData(); }, []);
+
+  const handleSubmit = async () => {
     if (!selectedMood && !journal.trim()) return;
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3000);
-    setJournal("");
-    setSelectedMood(null);
+    setSubmitError("");
+    try {
+      const moodMeta = moods.find((m) => m.value === selectedMood);
+      await wellnessAPI.logMood({
+        mood: selectedMood || "neutral",
+        emoji: moodMeta?.emoji,
+        stress_level: stress,
+        energy_level: energy,
+        sleep_hours: sleep,
+        journal_note: journal.trim() || undefined,
+      });
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 3000);
+      setJournal("");
+      setSelectedMood(null);
+      await loadMoodData();
+    } catch (e) {
+      setSubmitError(e.message);
+    }
   };
 
   return (
@@ -77,6 +131,9 @@ export const MoodPage = ({ dark }) => {
             style={{ width: "100%", padding: 14, borderRadius: 10, border: `1px solid ${t.border}`, background: t.inputBg, color: t.textPrimary, fontSize: 14, outline: "none", resize: "vertical", lineHeight: 1.6, boxSizing: "border-box", fontFamily: "inherit" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
             <span style={{ fontSize: 12, color: t.textMuted }}>{journal.length} characters</span>
+            {submitError && (
+              <div style={{ color: C.red, fontSize: 12, marginBottom: 8 }}>{submitError}</div>
+            )}
             <AnimatePresence mode="wait">
               {submitted ? (
                 <motion.div key="ok" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
@@ -93,12 +150,19 @@ export const MoodPage = ({ dark }) => {
         </GlassCard>
       </div>
 
+      {loadError && (
+        <div style={{ color: C.amber, fontSize: 13, marginBottom: 12 }}>{loadError}</div>
+      )}
+
       {/* Timeline */}
       <GlassCard dark={dark} style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 15, fontWeight: 600, color: t.textPrimary, marginBottom: 20 }}>📅 Emotional History Timeline</div>
+        {history.length === 0 ? (
+          <div style={{ color: t.textSecondary, fontSize: 13 }}>No mood logs yet. Log your first mood above.</div>
+        ) : (
         <div style={{ position: "relative" }}>
           <div style={{ position: "absolute", left: 20, top: 0, bottom: 0, width: 2, background: `linear-gradient(180deg, ${C.purple}, ${C.cyan})`, borderRadius: 1 }} />
-          {moodHistory.map((entry, i) => (
+          {history.map((entry, i) => (
             <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }}
               style={{ display: "flex", gap: 20, marginBottom: 20, paddingLeft: 48, position: "relative" }}>
               <div style={{ position: "absolute", left: 10, width: 20, height: 20, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.cyan})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, border: `2px solid ${dark ? C.bgDark : C.bgLight}` }}>
@@ -121,13 +185,14 @@ export const MoodPage = ({ dark }) => {
             </motion.div>
           ))}
         </div>
+        )}
       </GlassCard>
 
       {/* Mood chart */}
       <GlassCard dark={dark}>
         <div style={{ fontSize: 15, fontWeight: 600, color: t.textPrimary, marginBottom: 16 }}>Weekly Emotional Chart</div>
         <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={moodData}>
+          <LineChart data={chartData.length ? chartData : [{ day: "-", mood: 0, energy: 0 }]}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
             <XAxis dataKey="day" tick={{ fill: t.textSecondary, fontSize: 12 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: t.textSecondary, fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -144,15 +209,68 @@ export const MoodPage = ({ dark }) => {
 // ─── ANALYTICS PAGE ────────────────────────────────────────────────────────────
 export const AnalyticsPage = ({ dark }) => {
   const t = useTheme(dark);
+  const [moodStats, setMoodStats] = useState(null);
+  const [focusStats, setFocusStats] = useState(null);
+  const [chartData, setChartData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [mood, focus, chart] = await Promise.all([
+          wellnessAPI.getMoodStats(),
+          focusAPI.getStats(),
+          wellnessAPI.getMoodChart(),
+        ]);
+        setMoodStats(mood);
+        setFocusStats(focus);
+        setChartData(
+          (chart || []).map((row) => ({
+            day: row.date,
+            sleep: row.sleep ?? 0,
+            stress: row.stress ?? 0,
+            score: row.mood_score ?? 0,
+          }))
+        );
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const wellnessScore = moodStats?.wellness_score ?? moodStats?.avg_mood_score ?? 0;
+  const burnoutRisk = moodStats?.burnout_risk ?? moodStats?.avg_stress ?? 0;
+  const productivity = focusStats?.completion_rate ?? 0;
+  const emotionalBalance = moodStats?.emotional_balance ?? 0;
+  const pieData = moodStats?.mood_distribution?.length
+    ? moodStats.mood_distribution
+    : [{ name: "No data", value: 100 }];
+  const trendData = chartData.map((d, i) => ({ week: d.day || `D${i + 1}`, score: d.score }));
+
+  const statCards = [
+    { label: "AI Wellness Score", value: loading ? "…" : `${wellnessScore}/100`, icon: "💎", color: C.purple },
+    { label: "Burnout Risk", value: loading ? "…" : `${burnoutRisk}%`, icon: "🔥", color: C.amber },
+    { label: "Productivity", value: loading ? "…" : `${productivity}%`, icon: "⚡", color: C.cyan },
+    { label: "Emotional Balance", value: loading ? "…" : `${emotionalBalance}%`, icon: "⚖️", color: C.green },
+  ];
+
+  const burnoutRadar = moodStats?.count
+    ? [
+        { subject: "Stress", value: moodStats.avg_stress ?? 0 },
+        { subject: "Sleep", value: Math.min(100, (moodStats.avg_sleep ?? 0) * 12.5) },
+        { subject: "Energy", value: moodStats.avg_energy ?? 0 },
+        { subject: "Mood", value: wellnessScore },
+      ]
+    : [{ subject: "Stress", value: 0 }, { subject: "Sleep", value: 0 }, { subject: "Energy", value: 0 }, { subject: "Mood", value: 0 }];
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      {error && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{error}</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 16 }}>
-        {[
-          { label: "AI Wellness Score", value: "78/100", icon: "💎", color: C.purple },
-          { label: "Burnout Risk",       value: "24%",    icon: "🔥", color: C.amber  },
-          { label: "Productivity",       value: "82%",    icon: "⚡", color: C.cyan   },
-          { label: "Emotional Balance",  value: "71%",    icon: "⚖️", color: C.green  },
-        ].map(card => <StatCard dark={dark} key={card.label} {...card} />)}
+        {statCards.map(card => <StatCard dark={dark} key={card.label} {...card} />)}
       </div>
 
       {/* AI Insight banner */}
@@ -162,7 +280,9 @@ export const AnalyticsPage = ({ dark }) => {
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: t.textPrimary, marginBottom: 6 }}>AI Daily Insight — May 22, 2026</div>
             <div style={{ fontSize: 14, color: t.textSecondary, lineHeight: 1.7 }}>
-              Your mood trend improved by <span style={{ color: C.green, fontWeight: 600 }}>+8%</span> this week. Stress peaked on Tuesday but recovered well. The nights you slept 7.5h+ showed significantly higher mood the next day. <span style={{ color: C.purpleLight, fontWeight: 500 }}>Protect your sleep schedule this week.</span>
+              {moodStats?.count
+                ? <>Based on <strong>{moodStats.count}</strong> logs this week: average mood <span style={{ color: C.green, fontWeight: 600 }}>{wellnessScore}/100</span>, stress <span style={{ color: C.amber, fontWeight: 600 }}>{burnoutRisk}%</span>, sleep <span style={{ color: C.indigo, fontWeight: 600 }}>{moodStats.avg_sleep}h</span>. Focus completion: <span style={{ color: C.cyan, fontWeight: 600 }}>{productivity}%</span>.</>
+                : "Log your mood on the Mood Tracker page to unlock personalized AI insights here."}
             </div>
           </div>
         </div>
@@ -172,7 +292,7 @@ export const AnalyticsPage = ({ dark }) => {
         <GlassCard dark={dark}>
           <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary, marginBottom: 16 }}>8-Week Wellness Trend</div>
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={weeklyWellness}>
+            <AreaChart data={trendData.length ? trendData : [{ week: "-", score: 0 }]}>
               <defs>
                 <linearGradient id="wellGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={C.cyan} stopOpacity={0.4} />
@@ -191,7 +311,7 @@ export const AnalyticsPage = ({ dark }) => {
         <GlassCard dark={dark}>
           <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary, marginBottom: 16 }}>Burnout Risk Radar</div>
           <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={burnoutData}>
+            <RadarChart data={burnoutRadar}>
               <PolarGrid stroke="rgba(255,255,255,0.08)" />
               <PolarAngleAxis dataKey="subject" tick={{ fill: t.textSecondary, fontSize: 11 }} />
               <Radar name="Risk" dataKey="value" stroke={C.red} fill={C.red} fillOpacity={0.15} strokeWidth={2} />
@@ -202,7 +322,7 @@ export const AnalyticsPage = ({ dark }) => {
         <GlassCard dark={dark}>
           <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary, marginBottom: 16 }}>Sleep vs Stress Analysis</div>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={moodData}>
+            <BarChart data={chartData.length ? chartData : [{ day: "-", sleep: 0, stress: 0 }]}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis dataKey="day" tick={{ fill: t.textSecondary, fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: t.textSecondary, fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -214,15 +334,15 @@ export const AnalyticsPage = ({ dark }) => {
         </GlassCard>
 
         <GlassCard dark={dark} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary, marginBottom: 16 }}>Campus Wellness Distribution</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary, marginBottom: 16 }}>Your Mood Distribution</div>
           <PieChart width={200} height={180}>
-            <Pie data={wellnessPieData} cx={100} cy={90} innerRadius={55} outerRadius={80} paddingAngle={3} dataKey="value">
-              {wellnessPieData.map((_, i) => <Cell key={i} fill={pieColors[i]} />)}
+            <Pie data={pieData} cx={100} cy={90} innerRadius={55} outerRadius={80} paddingAngle={3} dataKey="value">
+              {pieData.map((_, i) => <Cell key={i} fill={pieColors[i % pieColors.length]} />)}
             </Pie>
             <Tooltip contentStyle={{ background: t.tooltipBg, border: `1px solid ${t.border}`, borderRadius: 8, color: t.textPrimary }} />
           </PieChart>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-            {wellnessPieData.map((d, i) => (
+            {pieData.map((d, i) => (
               <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: pieColors[i] }} />
                 <span style={{ fontSize: 11, color: t.textSecondary }}>{d.name} {d.value}%</span>

@@ -61,9 +61,14 @@ export default function App() {
       }
       try {
         const me = await authAPI.me();
-        if (!cancelled) {
+        if (!cancelled && me && me.role) {
           applyUser(me);
-          if (AUTH_PAGES.includes(page)) setPage(me.role === "admin" ? "admin" : me.role === "counselor" ? "counselor" : "dashboard");
+          if (AUTH_PAGES.includes(page)) {
+            setPage(me.role === "admin" ? "admin" : me.role === "counselor" ? "counselor" : "dashboard");
+          }
+        } else if (!cancelled) {
+          clearTokens();
+          setUserState(null);
         }
       } catch {
         clearTokens();

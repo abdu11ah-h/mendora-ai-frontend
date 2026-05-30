@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { C, useTheme, ROLES } from "../lib/theme";
 import { GlassCard, GlowButton } from "./ui";
 import { authAPI, setUser } from "../lib/api";
+import { validateStaffRole } from "../lib/rolePolicy";
 
 // ─── ROLE SELECTOR CARD ───────────────────────────────────────────────────────
 const RoleCard = ({ role, selected, onSelect, dark }) => {
@@ -87,23 +88,34 @@ const AuthPage = ({ mode, setPage, setRole, dark, onAuth }) => {
     if (!email) { setError("Please enter your email."); return; }
     if (mode !== "forgot" && !password) { setError("Please enter your password."); return; }
     if (mode === "signup" && password.length < 8) { setError("Password must be at least 8 characters."); return; }
+
+    const roleCheck = (mode === "login" || mode === "signup")
+      ? validateStaffRole(email, selectedRole)
+      : null;
+    if (roleCheck) {
+      setError(roleCheck);
+      return;
+    }
+
     setError("");
     setLoading(true);
     try {
-     if (mode === "login") {
+      if (mode === "login") {
         await authAPI.login(email, password);
         const me = await authAPI.me();
+        if (!me || !me.role) {
+          setError("Could not load your profile. Please sign in again.");
+          return;
+        }
         if (me.role !== selectedRole) {
           setError(`This account is a "${me.role}" account. Please select the "${me.role}" role.`);
-          setLoading(false);
           return;
         }
         setUser(me);
         if (setRole) setRole(me.role);
         if (onAuth) onAuth(me);
         setPage(me.role === "admin" ? "admin" : me.role === "counselor" ? "counselor" : "dashboard");
-      } 
-else if (mode === "signup") {
+      } else if (mode === "signup") {
         const result = await authAPI.register({
           email, password,
           first_name: firstName || "User",

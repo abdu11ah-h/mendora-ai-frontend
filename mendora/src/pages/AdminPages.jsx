@@ -7,21 +7,84 @@ import {
 } from "recharts";
 import { C, useTheme } from "../lib/theme";
 import { GlassCard, StatCard, GlowButton, RiskBadge, ProgressBar, Toggle } from "../components/ui";
-import { students, adminStats, weeklyWellness } from "../data/mockData";
+import { weeklyWellness } from "../data/mockData";
+import { counselorAPI, adminAPI } from "../lib/api";
 
 // ─── COUNSELOR PAGE ────────────────────────────────────────────────────────────
 export const CounselorPage = ({ dark }) => {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [note, setNote] = useState("");
+  const [students, setStudents] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [pastNotes, setPastNotes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const t = useTheme(dark);
+
+  const loadData = async () => {
+    try {
+      const [studentList, alertList] = await Promise.all([
+        counselorAPI.getStudents(),
+        counselorAPI.getAlerts(),
+      ]);
+      setStudents(studentList || []);
+      setAlerts(alertList || []);
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const openNotes = async (student) => {
+    setSelectedStudent(student);
+    setNote("");
+    try {
+      const notes = await counselorAPI.getNotes(student.id);
+      setPastNotes(notes || []);
+    } catch {
+      setPastNotes([]);
+    }
+  };
+
+  const saveNote = async () => {
+    if (!selectedStudent || !note.trim()) return;
+    setSaving(true);
+    try {
+      await counselorAPI.addNote({
+        student_id: selectedStudent.id,
+        note: note.trim(),
+        is_private: true,
+        risk_level: selectedStudent.risk || selectedStudent.risk_level || "low",
+      });
+      const notes = await counselorAPI.getNotes(selectedStudent.id);
+      setPastNotes(notes || []);
+      setNote("");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const highRiskCount = students.filter((s) => ["high", "critical"].includes(s.risk || s.risk_level)).length;
+  const avgMood = students.length
+    ? Math.round(students.reduce((a, s) => a + (s.mood_score ?? s.mood ?? 0), 0) / students.length)
+    : 0;
+  const totalSessions = students.reduce((a, s) => a + (s.sessions || 0), 0);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      {error && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{error}</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 16 }}>
-        <StatCard dark={dark} label="Assigned Students" value="24"  icon="👥" color={C.blue}  />
-        <StatCard dark={dark} label="High Risk"          value="3"   icon="🚨" color={C.red}   />
-        <StatCard dark={dark} label="Sessions Today"     value="8"   icon="📋" color={C.green} />
-        <StatCard dark={dark} label="Avg Wellness"       value="65%" icon="💚" color={C.cyan}  />
+        <StatCard dark={dark} label="Assigned Students" value={loading ? "…" : String(students.length)} icon="👥" color={C.blue} />
+        <StatCard dark={dark} label="High Risk" value={loading ? "…" : String(highRiskCount)} icon="🚨" color={C.red} />
+        <StatCard dark={dark} label="Chat Sessions" value={loading ? "…" : String(totalSessions)} icon="📋" color={C.green} />
+        <StatCard dark={dark} label="Avg Mood Score" value={loading ? "…" : `${avgMood}%`} icon="💚" color={C.cyan} />
       </div>
 
       <GlassCard dark={dark} style={{ marginBottom: 16 }}>
@@ -36,7 +99,15 @@ export const CounselorPage = ({ dark }) => {
               </tr>
             </thead>
             <tbody>
-              {students.map((s, i) => (
+              {loading ? (
+                <tr><td colSpan={7} style={{ padding: 24, color: t.textSecondary, textAlign: "center" }}>Loading students…</td></tr>
+              ) : students.length === 0 ? (
+                <tr><td colSpan={7} style={{ padding: 24, color: t.textSecondary, textAlign: "center" }}>No students registered yet.</td></tr>
+              ) : students.map((s, i) => {
+                const moodVal = s.mood_score ?? s.mood ?? 0;
+                const risk = s.risk || s.risk_level || "low";
+                const statusRisk = s.status === "At Risk" ? "high" : s.status === "Monitoring" ? "medium" : "low";
+                return (
                 <motion.tr key={s.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
                   style={{ borderBottom: `1px solid ${t.border}` }}>
                   <td style={{ padding: 12 }}>
@@ -47,23 +118,23 @@ export const CounselorPage = ({ dark }) => {
                       <span style={{ fontSize: 14, color: t.textPrimary, fontWeight: 500 }}>{s.name}</span>
                     </div>
                   </td>
-                  <td style={{ padding: 12 }}><RiskBadge risk={s.risk} /></td>
+                  <td style={{ padding: 12 }}><RiskBadge risk={risk} /></td>
                   <td style={{ padding: 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ width: 60, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.08)" }}>
-                        <div style={{ width: `${s.mood}%`, height: "100%", borderRadius: 2, background: s.mood > 60 ? C.green : s.mood > 40 ? C.amber : C.red }} />
+                        <div style={{ width: `${moodVal}%`, height: "100%", borderRadius: 2, background: moodVal > 60 ? C.green : moodVal > 40 ? C.amber : C.red }} />
                       </div>
-                      <span style={{ fontSize: 13, color: t.textSecondary }}>{s.mood}</span>
+                      <span style={{ fontSize: 13, color: t.textSecondary }}>{moodVal}</span>
                     </div>
                   </td>
-                  <td style={{ padding: 12, fontSize: 13, color: t.textSecondary }}>{s.sessions}</td>
-                  <td style={{ padding: 12, fontSize: 13, color: t.textSecondary }}>{s.lastSeen}</td>
-                  <td style={{ padding: 12 }}><RiskBadge risk={s.status === "At Risk" ? "high" : s.status === "Monitoring" ? "medium" : "low"} /></td>
+                  <td style={{ padding: 12, fontSize: 13, color: t.textSecondary }}>{s.sessions ?? 0}</td>
+                  <td style={{ padding: 12, fontSize: 13, color: t.textSecondary }}>{s.last_active || s.lastSeen || "—"}</td>
+                  <td style={{ padding: 12 }}><RiskBadge risk={statusRisk} /></td>
                   <td style={{ padding: 12 }}>
-                    <GlowButton dark={dark} small onClick={() => setSelectedStudent(s)}>Notes</GlowButton>
+                    <GlowButton dark={dark} small onClick={() => openNotes(s)}>Notes</GlowButton>
                   </td>
                 </motion.tr>
-              ))}
+              );})}
             </tbody>
           </table>
         </div>
@@ -84,15 +155,17 @@ export const CounselorPage = ({ dark }) => {
 
         <GlassCard dark={dark}>
           <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary, marginBottom: 12 }}>🚨 Active Alerts</div>
-          {students.filter(s => s.risk === "high").map(s => (
-            <motion.div key={s.id} initial={{ x: -10, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
+          {alerts.length === 0 ? (
+            <div style={{ fontSize: 13, color: t.textSecondary }}>No high-risk alerts right now.</div>
+          ) : alerts.map(a => (
+            <motion.div key={a.id} initial={{ x: -10, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
               style={{ padding: 12, borderRadius: 10, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary }}>{s.name}</div>
-                  <div style={{ fontSize: 12, color: C.red }}>Mood: {s.mood}/100 • {s.lastSeen}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: t.textPrimary }}>{a.name || "Student"}</div>
+                  <div style={{ fontSize: 12, color: C.red }}>{a.message || a.severity} • {a.lastSeen || ""}</div>
                 </div>
-                <GlowButton dark={dark} small style={{ background: `linear-gradient(135deg, ${C.red}, #DC2626)` }}>Contact</GlowButton>
+                <GlowButton dark={dark} small onClick={() => counselorAPI.acknowledgeAlert(a.id).then(loadData)}>Acknowledge</GlowButton>
               </div>
             </motion.div>
           ))}
@@ -109,16 +182,26 @@ export const CounselorPage = ({ dark }) => {
               onClick={e => e.stopPropagation()}
               style={{ width: "90%", maxWidth: 500, padding: 28, borderRadius: 20, background: dark ? "#0d0d1a" : "#fff", border: `1px solid ${t.border}` }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: t.textPrimary, marginBottom: 4 }}>Session Notes — {selectedStudent.name}</div>
-              <div style={{ fontSize: 13, color: t.textSecondary, marginBottom: 20 }}>
-                Risk: <RiskBadge risk={selectedStudent.risk} /> • Mood: {selectedStudent.mood}/100
+              <div style={{ fontSize: 13, color: t.textSecondary, marginBottom: 12 }}>
+                Risk: <RiskBadge risk={selectedStudent.risk || selectedStudent.risk_level} /> • Mood: {(selectedStudent.mood_score ?? selectedStudent.mood ?? 0)}/100
               </div>
+              {pastNotes.length > 0 && (
+                <div style={{ maxHeight: 120, overflowY: "auto", marginBottom: 12, padding: 10, borderRadius: 8, background: dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)", border: `1px solid ${t.border}` }}>
+                  {pastNotes.map((n) => (
+                    <div key={n.id} style={{ fontSize: 12, color: t.textSecondary, marginBottom: 8, lineHeight: 1.5 }}>
+                      <span style={{ color: t.textMuted }}>{new Date(n.created_at).toLocaleDateString()} — </span>
+                      {n.note}
+                    </div>
+                  ))}
+                </div>
+              )}
               <textarea value={note} onChange={e => setNote(e.target.value)}
                 placeholder="Add session notes, observations, or follow-up actions..."
                 rows={5}
                 style={{ width: "100%", padding: 14, borderRadius: 10, border: `1px solid ${t.border}`, background: t.inputBg, color: t.textPrimary, fontSize: 14, outline: "none", resize: "vertical", boxSizing: "border-box", lineHeight: 1.6, fontFamily: "inherit" }} />
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
-                <GlowButton dark={dark} secondary onClick={() => setSelectedStudent(null)}>Cancel</GlowButton>
-                <GlowButton dark={dark} onClick={() => setSelectedStudent(null)}>Save Notes</GlowButton>
+                <GlowButton dark={dark} secondary onClick={() => { setSelectedStudent(null); setPastNotes([]); }}>Cancel</GlowButton>
+                <GlowButton dark={dark} onClick={saveNote} disabled={saving}>{saving ? "Saving…" : "Save Notes"}</GlowButton>
               </div>
             </motion.div>
           </motion.div>
@@ -131,17 +214,61 @@ export const CounselorPage = ({ dark }) => {
 // ─── ADMIN PAGE ────────────────────────────────────────────────────────────────
 export const AdminPage = ({ dark }) => {
   const t = useTheme(dark);
-  const users = [
-    { name: "Sara Ahmed",  role: "Student",   status: "Active",  wellness: 78 },
-    { name: "Dr. Imran",   role: "Counselor", status: "Active",  wellness: 90 },
-    { name: "Hamza Ali",   role: "Student",   status: "At Risk", wellness: 28 },
-    { name: "Zara Hussain",role: "Student",   status: "Active",  wellness: 88 },
-  ];
+  const [stats, setStats] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadAdmin = async () => {
+    try {
+      const [s, u] = await Promise.all([adminAPI.getStats(), adminAPI.getUsers(1)]);
+      setStats(s);
+      setUsers(u?.users || []);
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadAdmin(); }, []);
+
+  const toggleActive = async (user) => {
+    try {
+      await adminAPI.updateUser(user.id, { is_active: !user.is_active });
+      await loadAdmin();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const removeUser = async (user) => {
+    if (!window.confirm(`Delete ${user.first_name} ${user.last_name}?`)) return;
+    try {
+      await adminAPI.deleteUser(user.id);
+      await loadAdmin();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const statCards = stats ? [
+    { label: "Total Users", value: String(stats.total_users ?? 0), icon: "👥", change: "" },
+    { label: "Active (24h)", value: String(stats.active_sessions ?? 0), icon: "🟢", change: "" },
+    { label: "Chat Sessions", value: String(stats.total_chat_sessions ?? 0), icon: "💬", change: "" },
+    { label: "Risk Flags", value: String(stats.unresolved_risk_flags ?? 0), icon: "🚨", change: "" },
+  ] : [];
+
+  const roleLabel = (r) => r === "student" ? "Student" : r === "counselor" ? "Counselor" : r === "admin" ? "Admin" : r;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      {error && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{error}</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 16 }}>
-        {adminStats.map(s => <StatCard dark={dark} key={s.label} {...s} color={C.purple} />)}
+        {loading
+          ? Array(4).fill(0).map((_, i) => <StatCard dark={dark} key={i} label="…" value="…" icon="⏳" color={C.purple} />)
+          : statCards.map(s => <StatCard dark={dark} key={s.label} {...s} color={C.purple} />)}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 16 }}>
@@ -191,41 +318,53 @@ export const AdminPage = ({ dark }) => {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {["User", "Role", "Status", "Wellness", "Last Active", "Actions"].map(h => (
+              {["User", "Role", "Status", "Email verified", "Last login", "Actions"].map(h => (
                 <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, color: t.textSecondary, fontWeight: 600, borderBottom: `1px solid ${t.border}` }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {users.map((u, i) => (
-              <motion.tr key={u.name} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
+            {loading ? (
+              <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: t.textSecondary }}>Loading users…</td></tr>
+            ) : users.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: t.textSecondary }}>No users yet.</td></tr>
+            ) : users.map((u, i) => {
+              const fullName = `${u.first_name} ${u.last_name}`;
+              const active = u.is_active !== false;
+              return (
+              <motion.tr key={u.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
                 style={{ borderBottom: `1px solid ${t.border}` }}>
                 <td style={{ padding: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ width: 32, height: 32, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}, ${C.cyan})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "white", fontWeight: 700 }}>
-                      {u.name.split(" ").map(n => n[0]).join("")}
+                      {(u.first_name?.[0] || "") + (u.last_name?.[0] || "")}
                     </div>
-                    <span style={{ fontSize: 14, color: t.textPrimary }}>{u.name}</span>
+                    <div>
+                      <span style={{ fontSize: 14, color: t.textPrimary, display: "block" }}>{fullName}</span>
+                      <span style={{ fontSize: 11, color: t.textMuted }}>{u.email}</span>
+                    </div>
                   </div>
                 </td>
-                <td style={{ padding: 12, fontSize: 13, color: t.textSecondary }}>{u.role}</td>
+                <td style={{ padding: 12, fontSize: 13, color: t.textSecondary }}>{roleLabel(u.role)}</td>
                 <td style={{ padding: 12 }}>
-                  <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: u.status === "Active" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)", color: u.status === "Active" ? C.green : C.red }}>
-                    {u.status}
+                  <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: active ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)", color: active ? C.green : C.red }}>
+                    {active ? "Active" : "Inactive"}
                   </span>
                 </td>
-                <td style={{ padding: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 60, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.08)" }}>
-                      <div style={{ width: `${u.wellness}%`, height: "100%", borderRadius: 2, background: u.wellness > 60 ? C.green : C.red }} />
-                    </div>
-                    <span style={{ fontSize: 12, color: t.textSecondary }}>{u.wellness}</span>
-                  </div>
+                <td style={{ padding: 12, fontSize: 13, color: t.textSecondary }}>
+                  {u.is_verified ? "Verified" : "Pending"}
                 </td>
-                <td style={{ padding: 12, fontSize: 13, color: t.textSecondary }}>Today</td>
-                <td style={{ padding: 12 }}><GlowButton dark={dark} small secondary>View</GlowButton></td>
+                <td style={{ padding: 12, fontSize: 13, color: t.textSecondary }}>
+                  {u.last_login ? new Date(u.last_login).toLocaleDateString() : "—"}
+                </td>
+                <td style={{ padding: 12, display: "flex", gap: 8 }}>
+                  <GlowButton dark={dark} small secondary onClick={() => toggleActive(u)}>
+                    {active ? "Deactivate" : "Activate"}
+                  </GlowButton>
+                  <GlowButton dark={dark} small onClick={() => removeUser(u)} style={{ background: `linear-gradient(135deg, ${C.red}, #DC2626)` }}>Delete</GlowButton>
+                </td>
               </motion.tr>
-            ))}
+            );})}
           </tbody>
         </table>
       </GlassCard>
